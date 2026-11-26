@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from app.database.connection import initialize_database
 from app.ingestion.repository_loader import ingest_repository
 from app.retrieval.hybrid_retriever import retrieve
