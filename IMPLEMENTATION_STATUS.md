@@ -3,9 +3,9 @@
 ## Baseline
 
 - Existing workspace contains a partial baseline implementation of FastAPI, SQLite, ingestion, AST analysis, and retrieval.
-- Baseline validation is in progress; the first pass found an attribute-call AST gap and a nested-SQL connection ingestion defect.
+- Baseline testing found and fixed an attribute-call AST gap and a nested-SQL connection ingestion defect.
 - Python 3.14.2 and pip 26.2.2 are available.
-- The implementation will use FastAPI, Pydantic, SQLite, pytest, Chroma where compatible, and Hugging Face-compatible embeddings.
+- Current implementation uses FastAPI, Pydantic, SQLite, pytest, Streamlit, and deterministic hash vectors; no transformer model or Chroma store is active.
 
 ## Planned phases
 
@@ -24,14 +24,14 @@
 
 - Implemented and tested: FastAPI foundation, SQLite, incremental local ingestion, source-aware chunking, AST symbols, relationships, BM25, hash dense retrieval, RRF, RAG evidence assembly, citation labels, abstention, PR report assembly, incident investigation, HMAC webhook verification, Streamlit UI, Docker and GitHub Actions.
 - Implemented but not fully evaluated: graph traversal and end-to-end Streamlit behavior.
-- Partially implemented: GitHub REST client; no confirmed Check Run or PR comment publishing.
 - Implemented: Public GitHub HTTPS connection and on-demand file retrieval without cloning through the API and Streamlit sidebar.
+- Implemented: Read-only GitHub pull request diff retrieval for connected repositories, with size limits and diff evidence in PR reports.
+- Not implemented: GitHub Check Run or PR comment publishing, and webhook event processing.
 - Not implemented: active Chroma retrieval, hosted LLM generation, reranker, trained ML model, MLflow and gold retrieval benchmark.
 - Synthetic data: clearly labelled in `data/sample_repository`, `data/sample_documents`, and `data/sample_incidents`.
 
-## Dependency plan
+## Active dependencies
 
-- Runtime: FastAPI, Pydantic, Uvicorn, NumPy, Pandas, scikit-learn, Chroma, optional Hugging Face libraries.
+- Runtime: FastAPI, Pydantic, Uvicorn, Streamlit.
 - Testing: pytest and HTTPX.
-- MLflow is optional and will only be added when a meaningful local experiment is implemented.
-- The initial CPU implementation will avoid GPU requirements.
+- ML/vector-store dependencies will be added only when those features are implemented.

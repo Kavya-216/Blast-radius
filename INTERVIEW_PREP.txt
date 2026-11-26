@@ -38,11 +38,11 @@ Example: src/payment.py imports calculate_tax from src/billing.py. PaymentProces
 
 SECTION G: APIs, BACKEND AND DATABASES
 
-REST maps operations to HTTP methods. GET reads, POST creates/actions, 422 means invalid input, 401 means authentication failure, 503 means unavailable configuration, 404 means missing repository. FastAPI dispatches typed endpoints. Pydantic validates payload shape. Uvicorn serves ASGI. SQLite tables use primary keys, unique repository IDs, foreign-key document links, and indexes on chunk and relationship fields. Transactions commit index updates together. Chroma is a permitted dependency but inactive in the current implementation. SQLite is source/metadata truth; vector storage would hold embeddings as a separate responsibility.
+REST maps operations to HTTP methods. GET reads, POST creates/actions, 422 means invalid input, 401 means authentication failure, 503 means unavailable configuration, 404 means missing repository. FastAPI dispatches typed endpoints. Pydantic validates payload shape. Uvicorn serves ASGI. SQLite tables use primary keys, unique repository IDs, foreign-key document links, and indexes on chunk and relationship fields. Transactions commit index updates together. Chroma is a possible future option but is not used by the current implementation. SQLite stores source, metadata, chunks, and relationships.
 
 SECTION H: GITHUB INTEGRATION
 
-Git tracks snapshots and diffs. A repository has commits and branches. A PR compares base and head SHAs. The webhook signature prevents unsigned tampering. HMAC-SHA256 uses the exact raw body and a secret. Idempotency means repeated delivery should not create duplicate analysis. A GitHub token accesses the REST API. Check Runs and comments require additional publishing implementation. The project verifies webhooks but does not claim to publish checks or comments.
+Git tracks snapshots and diffs. A repository has commits and branches. A PR compares base and head SHAs. Connected GitHub repositories support read-only PR diff retrieval; the webhook signature prevents unsigned tampering. HMAC-SHA256 uses the exact raw body and a secret. Idempotency means repeated delivery should not create duplicate analysis. A GitHub token accesses the REST API. Check Runs, comments, and webhook event processing are not implemented.
 
 Complete PR walkthrough: webhook or local payload -> validate -> identify repository/base/head -> git diff -> AST analyze changed symbols -> retrieve evidence -> traverse graph -> assemble uncertainty -> produce report -> optionally publish only after GitHub confirms success.
 
@@ -95,7 +95,6 @@ Intermediate
 34. What is abstention? Refusing to answer with insufficient evidence.
 35. How are citations validated? Response labels are compared with retrieved evidence labels.
 36. Why label synthetic data? To avoid misleading users about real incidents.
-37. Why does the project not publish PR comments? Publishing is not implemented and success is not claimed.
 38. What does ML risk predict in the design? A future regression label for a change.
 39. Why not train now? No valid labelled temporal dataset exists.
 40. Why is accuracy weak for rare incidents? True-negative majority can dominate.
@@ -180,7 +179,7 @@ What if a model predicts wrong tests? It should be advisory and measured against
 How evaluate rare incidents? Use PR-AUC, recall at a chosen threshold, temporal folds and avoid accuracy-only claims.
 How prevent data leakage? Snapshot features at change time and create labels only from later outcomes.
 How know calibration? Compare predicted bins to observed regression rates on held-out temporal data.
-What happens if GitHub is unavailable? Return or record explicit failure and never claim Check Run/comment publication.
+What happens if GitHub is unavailable? PR analysis returns an explicit gateway error; it never claims Check Run/comment publication.
 How handle prompt injection? Treat source as untrusted content and keep system instructions separate in a future hosted provider.
 What for millions of files? Incremental batching, persistent vector and search infrastructure, queueing and caching.
 What are the limitations? Static-only evidence, hash embeddings, offline generation, no ML labels, no real benchmark and no production GitHub publishing.
@@ -188,7 +187,7 @@ What did you implement yourself? The ingestion, AST, graph, BM25, RRF, offline R
 
 SECTION M: CODE WALKTHROUGH
 
-app/main.py: creates FastAPI, initializes startup database schema and registers routers.
+app/main.py: creates FastAPI, initializes the database schema through its lifespan and registers routers.
 app/config.py: reads database, embedding, provider and GitHub environment settings.
 app/database/connection.py: owns SQLite schema and connection lifecycle.
 app/api/routes/repositories.py: repository registration, lookup, indexing and retrieval.
@@ -199,17 +198,17 @@ app/code_analysis/ast_parser.py: Python AST extraction and direct relationship d
 app/graph/graph_store.py: SQL relationship and symbol persistence.
 app/graph/traversal.py: bounded relationship traversal.
 app/retrieval/embeddings.py: deterministic offline hash embedding.
+app/retrieval/github_retriever.py: bounded, read-only GitHub file retrieval without cloning.
 app/retrieval/bm25.py: sparse lexical ranking.
 app/retrieval/rrf.py: reciprocal rank fusion.
 app/retrieval/hybrid_retriever.py: dense/BM25 fusion and evidence output.
 app/rag/llm_provider.py: offline evidence formatting.
 app/rag/citation_validator.py: label-level citation verification.
-app/impact_analysis/analyzer.py: safe local Git diff parsing.
 app/impact_analysis/report_builder.py: impact evidence and uncertainty assembly.
 app/incident/investigator.py: historical-evidence and hypothesis output.
 app/ml/predict.py: explicit no-model fallback.
 app/github/webhook.py: HMAC signature verification.
-app/github/client.py: optional authenticated REST client.
+app/github/repository_url.py: validates GitHub URLs and derives repository identifiers.
 frontend/streamlit_app.py: three-workflow demo UI.
 scripts/run_demo.py: index and retrieve from synthetic demo repository.
 scripts/run_evaluation.py: actual demo indexing/retrieval smoke evaluation.
@@ -217,9 +216,10 @@ scripts/run_evaluation.py: actual demo indexing/retrieval smoke evaluation.
 SECTION N: HONEST PROJECT DEFENCE
 
 Implemented and tested: health/API, SQLite, incremental ingestion, AST, relationships, BM25, hash embeddings, RRF, RAG abstention, PR/incident output, webhook verification and tests.
-Implemented but not fully evaluated: retrieval quality, graph traversal, Streamlit, Docker.
-Partially implemented: GitHub client and webhook; no Check Run/comment publication.
-Not implemented: trained ML, Chroma active retrieval, hosted LLM, reranker, MLflow, benchmark gold set.
-Blocked: real-world results require repository labels and credentials.
+Implemented but not fully evaluated: graph traversal, end-to-end UI, and retrieval quality; the evaluation script is only a smoke test.
+Configured but not production-validated: Docker deployment. GitHub Actions runs the test suite.
+GitHub access is bounded and read-only; live PR diffs are fetched for connected repositories, but webhook signatures are only verified, events are not processed, and Check Runs/comments are not published.
+Not implemented: trained ML, active Chroma retrieval, hosted LLM, reranker, MLflow, and a benchmark gold set.
+Real-world risk prediction and retrieval metrics require labelled outcomes and an externally supplied gold set.
 Synthetic demo data must never be described as real company incident evidence.
 The project is suitable as an interview/demo engineering implementation, not as a claim of production safety or complete dependency coverage.

@@ -4,10 +4,23 @@ from collections import Counter
 
 
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_]+")
+QUERY_STOP_WORDS = {
+    "a", "an", "and", "are", "about", "can", "do", "does", "for", "how",
+    "i", "in", "is", "it", "me", "of", "on", "or", "the", "this", "to",
+    "what", "which", "who", "why", "with", "you",
+}
 
 
 def tokenize(text: str) -> list[str]:
     return [token.lower() for token in TOKEN_PATTERN.findall(text)]
+
+
+def focus_query(query: str) -> str:
+    tokens = tokenize(query)
+    if "anything" in tokens:
+        tokens = [token for token in tokens if token not in {"rag", "anything"}]
+    focused = [token for token in tokens if token not in QUERY_STOP_WORDS]
+    return " ".join(focused) or query
 
 
 class BM25:

@@ -1,14 +1,11 @@
+from contextlib import nullcontext
+
 from app.database.connection import database
 
 
 def store_symbols_and_relationships(repository_id: str, symbols, relationships, connection=None) -> None:
     owns_connection = connection is None
-    if owns_connection:
-        from contextlib import nullcontext
-        context = database()
-    else:
-        from contextlib import nullcontext
-        context = nullcontext(connection)
+    context = database() if owns_connection else nullcontext(connection)
     with context as connection:
         for symbol in symbols:
             connection.execute(

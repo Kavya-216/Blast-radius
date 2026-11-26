@@ -10,13 +10,13 @@ ImpactLens is a decision-support prototype for exploring software repositories. 
 
 Ask questions about source, tests, architecture notes, or incident records. Connect a public GitHub repository from the sidebar without cloning it. For each query, ImpactLens reads the GitHub file tree, fetches a bounded set of relevant text files, ranks their chunks, and displays the supporting paths.
 
-The response includes a short **plain-English paragraph** made by selecting relevant explanatory sentences from retrieved files, followed by expandable source evidence. It is extractive—not an LLM-generated paraphrase. If retrieval finds no evidence, it says so rather than inventing an answer.
+The response includes a short **plain-English paragraph** grounded in retrieved files, followed by expandable source evidence. It uses deterministic summaries, not a hosted LLM or free-form generated explanation. If retrieval finds no evidence, it says so rather than inventing an answer.
 
 ### Analyze a PR
 
-Enter a PR number, title, and description. ImpactLens searches the selected repository for related code and test files and shows uncertainties.
+Enter a PR number, title, and description. For a connected GitHub repository, ImpactLens fetches the PR diff read-only, uses changed paths and patch lines to retrieve related code and tests, and includes a bounded diff excerpt as evidence. Local repositories continue to use the supplied title and description.
 
-**Current limitation:** the UI does not fetch a live GitHub PR or its diff. The risk-model panel reports that no trained model is available; it does not produce a risk score.
+Diff downloads are capped at 1 MB; displayed diff evidence and changed-line retrieval context are capped at 20,000 and 10,000 characters, respectively. The risk-model panel reports that no trained model is available; it does not produce a risk score.
 
 ### Investigate an incident
 
@@ -105,7 +105,7 @@ curl -X POST http://localhost:8000/rag/query \
 - BM25, deterministic 128-dimensional hash vectors, cosine similarity, and RRF
 - Pytest and HTTPX
 
-Chroma is listed in `requirements.txt` but is **not used** by the current retrieval implementation. No hosted LLM, transformer embedding model, reranker, trained ML model, or MLflow experiment is active.
+The dependency list contains only packages used by the current app and tests. No Chroma vector store, hosted LLM, transformer embedding model, reranker, trained ML model, or MLflow experiment is active.
 
 ## API routes
 
@@ -154,10 +154,10 @@ The evaluation script is a smoke test, not a retrieval benchmark. No relevance-l
 | Graph relationship storage and bounded traversal | Implemented |
 | GitHub no-clone retrieval | Implemented for bounded text-file fetching |
 | Repository Q&A | Implemented as evidence formatting with citation checks and abstention |
-| PR impact UI | Related-evidence lookup from manually entered metadata; no live PR diff fetch |
+| PR impact UI | Read-only live diff for connected GitHub repositories; manual metadata for local repositories |
 | Incident investigation | Similarity-based evidence and explicitly labelled hypotheses |
 | Webhook signature verification | Implemented; no automatic PR processing |
-| GitHub Check Runs/comments | Not implemented |
+| GitHub Check Runs/comments and webhook event processing | Not implemented |
 | Trained regression-risk model | Not available without labelled training data |
 | Chroma vector storage, hosted LLM, reranking, MLflow | Not active |
 
@@ -167,7 +167,7 @@ The evaluation script is a smoke test, not a retrieval benchmark. No relevance-l
 - Hash embeddings are deterministic lexical features, not semantic transformer embeddings.
 - Remote retrieval selects files partly by their paths; relevant files can be missed.
 - GitHub rate limits and recursive-tree truncation can limit remote queries.
-- The offline summary selects and combines relevant source sentences; it does not perform free-form LLM synthesis or guarantee a complete explanation.
+- The offline summary uses deterministic sentence selection and can summarize explicit layer-size tables for architecture questions; it does not perform free-form LLM synthesis or guarantee a complete explanation. Documentation cross-reference and code lines are not treated as summary prose.
 - Synthetic incidents and sample repositories are demo data, not real engineering history.
 - No benchmark establishes production accuracy or safety.
 

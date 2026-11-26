@@ -1,7 +1,7 @@
-import os
-import urllib.request
 import json
+import os
 import urllib.error
+import urllib.request
 
 import streamlit as st
 
@@ -75,30 +75,35 @@ def render_evidence(items: list[dict]) -> None:
         ):
             if item.get("symbol_name"):
                 st.caption(f"Symbol: {item['symbol_name']}")
-            st.code(item["content"], language="python" if item["source_type"] == "python" else "markdown")
+            language = {
+                "python": "python",
+                "markdown": "markdown",
+                "diff": "text",
+            }.get(item["source_type"], "text")
+            st.code(item["content"], language=language)
 
 
 st.set_page_config(page_title="ImpactLens", layout="wide")
 st.markdown(
     """
     <style>
-    [data-testid="stAppViewContainer"] { background: #f7f9fc; color: #172033; }
+    [data-testid="stAppViewContainer"] { background: #282a36; color: #f8f8f2; }
     .main .block-container { max-width: 1120px; padding-top: 1.6rem; padding-bottom: 3.5rem; }
-    section[data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #dce3ed; }
-    .main p, .main label, .main h1, .main h2, .main h3, .main h4 { color: #172033; }
+    section[data-testid="stSidebar"] { background: #21222c; border-right: 1px solid #6272a4; }
+    .main p, .main label, .main h1, .main h2, .main h3, .main h4 { color: #f8f8f2; }
     .impact-hero {
         padding: 1.5rem 1.8rem; border-radius: 14px; margin-bottom: 1.2rem;
-        color: #ffffff; background: #173b70; border-left: 6px solid #3273c5;
+        color: #f8f8f2; background: #343746; border: 1px solid #6272a4; border-left: 6px solid #bd93f9;
     }
-    .impact-hero .eyebrow { color: #e3edff; font-size: .72rem; font-weight: 750; letter-spacing: .11em; }
-    .impact-hero h1 { color: #ffffff !important; margin: .28rem 0 .35rem; font-size: 2rem; }
-    .impact-hero p { color: #ffffff !important; margin: 0; font-size: 1rem; }
+    .impact-hero .eyebrow { color: #8be9fd; font-size: .72rem; font-weight: 750; letter-spacing: .11em; }
+    .impact-hero h1 { color: #f8f8f2 !important; margin: .28rem 0 .35rem; font-size: 2rem; }
+    .impact-hero p { color: #f8f8f2 !important; margin: 0; font-size: 1rem; }
     div.stButton > button[kind="primary"] {
-        border: 1px solid #174b91; border-radius: 8px; color: #ffffff !important;
-        background: #205da8; font-weight: 650; padding: .5rem 1rem;
+        border: 1px solid #bd93f9; border-radius: 8px; color: #282a36 !important;
+        background: #bd93f9; font-weight: 650; padding: .5rem 1rem;
     }
-    div.stButton > button[kind="primary"]:hover { background: #174b91; border-color: #123d77; }
-    div[data-testid="stExpander"] { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; }
+    div.stButton > button[kind="primary"]:hover { background: #a87de8; border-color: #a87de8; }
+    div[data-testid="stExpander"] { background: #343746; border: 1px solid #6272a4; border-radius: 8px; }
     div[data-testid="stAlert"] { border-radius: 8px; }
     </style>
     """,
@@ -197,7 +202,7 @@ if workflow == "Ask the repository":
             st.markdown("#### Simple-English summary")
             st.info(result["answer"])
             if result["citation_validation"]["supported"]:
-                st.caption("Source sentences selected from retrieved evidence · citations validated")
+                st.caption("Grounded in retrieved repository evidence · citations validated")
             else:
                 st.warning("Some summary citations could not be matched to the retrieved evidence.")
             st.markdown("#### Retrieved sources")
@@ -207,13 +212,13 @@ if workflow == "Ask the repository":
 
 elif workflow == "Analyze a PR":
     st.subheader("PR impact review")
-    st.write("Use a pull request title and description to retrieve related code, tests, and engineering notes.")
+    st.write("Review a live GitHub diff alongside related code, tests, and engineering notes.")
     with st.container(border=True):
         pr_number = st.text_input("Pull request number", "1")
         title = st.text_input("Pull request title")
         description = st.text_area("Description and change summary", height=120)
         analyze_clicked = st.button("Build impact report", type="primary")
-    st.caption("Prototype scope: this form does not fetch a live PR diff from GitHub.")
+    st.caption("Connected GitHub repositories fetch the PR diff read-only. Local repositories use the details entered here.")
     if analyze_clicked:
         try:
             result = post("/prs/analyze", {
@@ -224,6 +229,13 @@ elif workflow == "Analyze a PR":
             })
             st.markdown("#### Potential impact")
             st.info(result["summary"])
+            if pull_request := result.get("pull_request"):
+                st.markdown("#### Changed files")
+                st.caption(
+                    f"+{pull_request['additions']} / -{pull_request['deletions']} lines"
+                )
+                if pull_request["changed_files"]:
+                    st.code("\n".join(pull_request["changed_files"]), language="text")
             left, right = st.columns(2)
             with left:
                 st.markdown("#### Test evidence")

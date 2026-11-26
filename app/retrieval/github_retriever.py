@@ -7,7 +7,7 @@ from urllib.request import Request, urlopen
 from app.config import GITHUB_TOKEN
 from app.github.repository_url import parse_public_github_url
 from app.ingestion.chunking import chunk_markdown, chunk_plaintext, chunk_python
-from app.retrieval.bm25 import BM25
+from app.retrieval.bm25 import BM25, focus_query
 from app.retrieval.embeddings import embed_text
 from app.retrieval.rrf import reciprocal_rank_fusion
 
@@ -66,6 +66,28 @@ def _cosine(left: list[float], right: list[float]) -> float:
     return dot / (left_norm * right_norm)
 
 
+def _intent_ranking(chunks: list[dict], query: str) -> list[str]:
+    normalized_query = query.lower()
+    if "architecture" not in normalized_query and "design" not in normalized_query:
+        return []
+    section_order = (
+        "network structure",
+        "layer design",
+        "system architecture",
+        "model architecture",
+        "architecture overview",
+        "data flow",
+        "component",
+    )
+    ranked = []
+    for section in section_order:
+        ranked.extend(
+            item["chunk_id"] for item in chunks
+            if section in (item["symbol_name"] or "").lower()
+        )
+    return list(dict.fromkeys(ranked))
+
+
 def retrieve_github_repository(remote_url: str, query: str, limit: int = 10) -> list[dict]:
     repository_id, owner, repository = parse_public_github_url(remote_url)
     api_base = f"https://api.github.com/repos/{quote(owner)}/{quote(repository)}"
@@ -82,7 +104,8 @@ def retrieve_github_repository(remote_url: str, query: str, limit: int = 10) -> 
             "GitHub truncated the repository file listing; use a local clone/index for this large repository."
         )
 
-    paths = _selected_paths(tree_data.get("tree", []), query)
+    search_query = focus_query(query)
+    paths = _selected_paths(tree_data.get("tree", []), search_query)
     chunks = []
     for item in paths:
         path = item["path"]
@@ -117,9 +140,16 @@ def retrieve_github_repository(remote_url: str, query: str, limit: int = 10) -> 
     bm25 = BM25().fit([item["content"] for item in chunks])
     sparse = [
         chunks[index]["chunk_id"]
-        for index, _ in bm25.search(query, limit=max(limit * 2, 20))
+        for index, _ in bm25.search(search_query, limit=max(limit * 2, 20))
     ]
-    query_vector = embed_text(query)
+    heading_search = BM25().fit([
+        item["symbol_name"] or item["file_path"] for item in chunks
+    ])
+    heading_ranking = [
+        chunks[index]["chunk_id"]
+        for index, _ in heading_search.search(search_query, limit=max(limit * 2, 20))
+    ]
+    query_vector = embed_text(search_query)
     dense_scores = [
         (item["chunk_id"], _cosine(query_vector, embed_text(item["content"])))
         for item in chunks
@@ -129,8 +159,18 @@ def retrieve_github_repository(remote_url: str, query: str, limit: int = 10) -> 
             dense_scores, key=lambda score: (-score[1], score[0])
         )[:max(limit * 2, 20)]
     ]
+    intent_ranking = _intent_ranking(chunks, query)
     by_id = {item["chunk_id"]: item for item in chunks}
+    fused = reciprocal_rank_fusion(
+        [dense, sparse, heading_ranking, intent_ranking]
+    )
+    if intent_ranking:
+        scores = dict(fused)
+        ordered_ids = intent_ranking + [
+            chunk_id for chunk_id, _ in fused if chunk_id not in intent_ranking
+        ]
+        fused = [(chunk_id, scores.get(chunk_id, 0.0)) for chunk_id in ordered_ids]
     return [
         {**by_id[chunk_id], "rrf_score": score}
-        for chunk_id, score in reciprocal_rank_fusion([dense, sparse])[:limit]
+        for chunk_id, score in fused[:limit]
     ]

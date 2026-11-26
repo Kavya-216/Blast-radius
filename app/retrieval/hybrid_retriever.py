@@ -1,7 +1,7 @@
 import math
 
 from app.database.connection import database
-from app.retrieval.bm25 import BM25
+from app.retrieval.bm25 import BM25, focus_query
 from app.retrieval.embeddings import embed_text
 from app.retrieval.rrf import reciprocal_rank_fusion
 
@@ -37,11 +37,20 @@ def retrieve(repository_id: str, query: str, limit: int = 10) -> list[dict]:
         return retrieve_github_repository(remote_url, query, limit)
     if not rows:
         return []
+    search_query = focus_query(query)
     bm25 = BM25().fit([row["content"] for row in rows])
-    sparse_hits = bm25.search(query, limit=max(limit * 2, 20))
+    sparse_hits = bm25.search(search_query, limit=max(limit * 2, 20))
     sparse_ranking = [rows[index]["chunk_id"] for index, _ in sparse_hits]
 
-    query_embedding = embed_text(query)
+    heading_search = BM25().fit([
+        row["symbol_name"] or row["file_path"] for row in rows
+    ])
+    heading_ranking = [
+        rows[index]["chunk_id"]
+        for index, _ in heading_search.search(search_query, limit=max(limit * 2, 20))
+    ]
+
+    query_embedding = embed_text(search_query)
     dense_scores = [
         (row["chunk_id"], cosine(query_embedding, embed_text(row["content"])))
         for row in rows
@@ -52,7 +61,9 @@ def retrieve(repository_id: str, query: str, limit: int = 10) -> list[dict]:
         )[: max(limit * 2, 20)]
     ]
 
-    fused = reciprocal_rank_fusion([dense_ranking, sparse_ranking])[:limit]
+    fused = reciprocal_rank_fusion(
+        [dense_ranking, sparse_ranking, heading_ranking]
+    )[:limit]
     row_by_id = {row["chunk_id"]: row for row in rows}
     results = []
     for chunk_id, rrf_score in fused:
