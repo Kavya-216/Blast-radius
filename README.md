@@ -10,7 +10,7 @@ ImpactLens is a decision-support prototype for exploring software repositories. 
 
 Ask questions about source, tests, architecture notes, or incident records. Connect a public GitHub repository from the sidebar without cloning it. For each query, ImpactLens reads the GitHub file tree, fetches a bounded set of relevant text files, ranks their chunks, and displays the supporting paths.
 
-The current response is an **offline evidence summary**, not a generated answer from an LLM. If retrieval finds no evidence, it says so rather than inventing an answer.
+The response includes a short **plain-English paragraph** made by selecting relevant explanatory sentences from retrieved files, followed by expandable source evidence. It is extractive—not an LLM-generated paraphrase. If retrieval finds no evidence, it says so rather than inventing an answer.
 
 ### Analyze a PR
 
@@ -167,7 +167,7 @@ The evaluation script is a smoke test, not a retrieval benchmark. No relevance-l
 - Hash embeddings are deterministic lexical features, not semantic transformer embeddings.
 - Remote retrieval selects files partly by their paths; relevant files can be missed.
 - GitHub rate limits and recursive-tree truncation can limit remote queries.
-- The offline response formats retrieved excerpts; it does not synthesize a comprehensive natural-language technical explanation.
+- The offline summary selects and combines relevant source sentences; it does not perform free-form LLM synthesis or guarantee a complete explanation.
 - Synthetic incidents and sample repositories are demo data, not real engineering history.
 - No benchmark establishes production accuracy or safety.
 

@@ -82,32 +82,24 @@ st.set_page_config(page_title="ImpactLens", layout="wide")
 st.markdown(
     """
     <style>
-    [data-testid="stAppViewContainer"] { background: #f4f7fb; }
-    .main .block-container { max-width: 1180px; padding-top: 2rem; padding-bottom: 4rem; }
-    section[data-testid="stSidebar"] { background: #111b30; }
-    section[data-testid="stSidebar"] h1,
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3,
-    section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] label { color: #e8eef9; }
+    [data-testid="stAppViewContainer"] { background: #f7f9fc; color: #172033; }
+    .main .block-container { max-width: 1120px; padding-top: 1.6rem; padding-bottom: 3.5rem; }
+    section[data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #dce3ed; }
+    .main p, .main label, .main h1, .main h2, .main h3, .main h4 { color: #172033; }
     .impact-hero {
-        padding: 1.7rem 2rem; border-radius: 18px; margin-bottom: 1.3rem;
-        color: #f8fafc; background: linear-gradient(115deg, #16243c 0%, #263f66 58%, #526d9a 100%);
-        box-shadow: 0 12px 30px rgba(30, 50, 80, .16);
+        padding: 1.5rem 1.8rem; border-radius: 14px; margin-bottom: 1.2rem;
+        color: #ffffff; background: #173b70; border-left: 6px solid #3273c5;
     }
-    .impact-hero .eyebrow { color: #b7c8e5; font-size: .73rem; font-weight: 700; letter-spacing: .13em; }
-    .impact-hero h1 { color: white; margin: .3rem 0 .4rem; font-size: 2.2rem; }
-    .impact-hero p { color: #e1e9f5; margin: 0; font-size: 1.02rem; }
+    .impact-hero .eyebrow { color: #e3edff; font-size: .72rem; font-weight: 750; letter-spacing: .11em; }
+    .impact-hero h1 { color: #ffffff !important; margin: .28rem 0 .35rem; font-size: 2rem; }
+    .impact-hero p { color: #ffffff !important; margin: 0; font-size: 1rem; }
     div.stButton > button[kind="primary"] {
-        border: 0; border-radius: 9px; color: white;
-        background: linear-gradient(100deg, #355fa8, #527bc0);
-        font-weight: 650; padding: .55rem 1.15rem;
+        border: 1px solid #174b91; border-radius: 8px; color: #ffffff !important;
+        background: #205da8; font-weight: 650; padding: .5rem 1rem;
     }
-    div[data-testid="stExpander"] { border-color: #dce4ef; border-radius: 10px; }
-    div[data-testid="stMetric"] {
-        background: white; border: 1px solid #e1e8f0; border-radius: 12px;
-        padding: .75rem 1rem; box-shadow: 0 3px 12px rgba(30, 50, 80, .04);
-    }
+    div.stButton > button[kind="primary"]:hover { background: #174b91; border-color: #123d77; }
+    div[data-testid="stExpander"] { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; }
+    div[data-testid="stAlert"] { border-radius: 8px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -202,9 +194,12 @@ if workflow == "Ask the repository":
             result = post("/rag/query", {"repository_id": repository_id, "question": question})
             if result["abstained"]:
                 st.warning("Not enough repository evidence was found for this question.")
-            st.markdown("#### Evidence summary")
+            st.markdown("#### Simple-English summary")
             st.info(result["answer"])
-            st.caption("Offline evidence summary · no hosted LLM is used")
+            if result["citation_validation"]["supported"]:
+                st.caption("Source sentences selected from retrieved evidence · citations validated")
+            else:
+                st.warning("Some summary citations could not be matched to the retrieved evidence.")
             st.markdown("#### Retrieved sources")
             render_evidence(result["evidence"])
         except Exception as exc:

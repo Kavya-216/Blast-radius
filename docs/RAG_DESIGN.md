@@ -16,4 +16,4 @@ Dense and sparse rankings are combined using Reciprocal Rank Fusion. RRF is robu
 Graph traversal finds bounded static relationships around retrieved symbols. It is labelled as static evidence and does not prove runtime control flow.
 
 ## Generation and abstention
-No hosted LLM is called. The offline provider returns retrieved excerpts, explicitly labels the provider, and abstains when evidence is empty. Citation validation compares labels in the response with evidence labels.
+No hosted LLM is called. The offline provider selects relevant explanatory sentences from retrieved Markdown or text and assembles a short cited paragraph; it does not freely paraphrase. It abstains when evidence is empty and explains when retrieved material lacks prose. Citation validation compares labels in the response with evidence labels.

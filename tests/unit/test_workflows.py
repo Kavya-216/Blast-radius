@@ -4,6 +4,8 @@ from app.main import app
 from app.database.connection import initialize_database, database
 from app.ingestion.repository_loader import ingest_repository
 from app.github.repository_url import parse_public_github_url
+from app.rag.llm_provider import generate_answer
+from app.rag.citation_validator import validate_citations
 
 
 client = TestClient(app)
@@ -27,6 +29,22 @@ def test_github_import_accepts_only_public_github_urls():
         except ValueError:
             continue
         raise AssertionError(f"Unexpectedly accepted URL: {url}")
+
+
+def test_rag_answer_is_a_cited_plain_english_paragraph():
+    evidence = [{
+        "source_type": "markdown",
+        "file_path": "docs/retrieval.md",
+        "content": (
+            "The retrieval pipeline first finds useful document passages using keyword matching. "
+            "It combines those results with vector similarity to improve coverage."
+        ),
+    }]
+    result = generate_answer("How does the retrieval pipeline work?", evidence)
+    assert result.text.startswith("In simple terms, ")
+    assert "\n" not in result.text
+    assert result.citations == ["markdown:docs/retrieval.md"]
+    assert validate_citations(result.text, evidence)["supported"] is True
 
 
 def test_github_import_endpoint_rejects_non_github_url():
