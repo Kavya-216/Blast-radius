@@ -20,3 +20,7 @@ class RepositoryStatus(BaseModel):
     remote_url: str | None
     index_version: str
     status: str
+
+
+class GitHubImportRequest(BaseModel):
+    remote_url: str = Field(min_length=1, max_length=500)

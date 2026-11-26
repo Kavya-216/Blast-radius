@@ -41,7 +41,7 @@ def chunk_python(text: str, file_path: str) -> list[Chunk]:
         end = starts[position + 1][0] if position + 1 < len(starts) else len(lines)
         content = "\n".join(lines[start:end]).strip()
         chunks.append(Chunk(
-            chunk_id=f"{file_path}:{symbol}",
+            chunk_id=f"{file_path}:line-{start + 1}:{symbol}",
             source_type="python",
             source_id=file_path,
             file_path=file_path,
@@ -56,17 +56,23 @@ def chunk_markdown(text: str, file_path: str) -> list[Chunk]:
     chunks: list[Chunk] = []
     current_heading = "document"
     current: list[str] = []
-    for line in text.splitlines():
+    current_start_line = 1
+    for line_number, line in enumerate(text.splitlines(), start=1):
         if line.startswith("#"):
             if current:
                 content = "\n".join(current).strip()
-                chunks.append(_make_chunk(file_path, "markdown", current_heading, content))
+                chunks.append(_make_chunk(
+                    file_path, "markdown", current_heading, content, current_start_line
+                ))
                 current = []
             current_heading = line.lstrip("# ").strip()
+            current_start_line = line_number
         current.append(line)
     if current:
         content = "\n".join(current).strip()
-        chunks.append(_make_chunk(file_path, "markdown", current_heading, content))
+        chunks.append(_make_chunk(
+            file_path, "markdown", current_heading, content, current_start_line
+        ))
     return chunks or [_make_chunk(file_path, "markdown", "document", text)]
 
 
@@ -74,13 +80,23 @@ def chunk_plaintext(text: str, file_path: str) -> list[Chunk]:
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
     if not paragraphs:
         return []
-    return [_make_chunk(file_path, "text", f"paragraph-{index + 1}", part)
+    return [_make_chunk(file_path, "text", f"paragraph-{index + 1}", part, index + 1)
             for index, part in enumerate(paragraphs)]
 
 
-def _make_chunk(file_path: str, source_type: str, symbol_name: str, content: str) -> Chunk:
+def _make_chunk(
+    file_path: str,
+    source_type: str,
+    symbol_name: str,
+    content: str,
+    start_line: int | None = None,
+) -> Chunk:
     return Chunk(
-        chunk_id=f"{file_path}:{symbol_name}",
+        chunk_id=(
+            f"{file_path}:line-{start_line}:{symbol_name}"
+            if start_line is not None
+            else f"{file_path}:{symbol_name}"
+        ),
         source_type=source_type,
         source_id=file_path,
         file_path=file_path,

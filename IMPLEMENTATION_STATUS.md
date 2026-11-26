@@ -25,6 +25,7 @@
 - Implemented and tested: FastAPI foundation, SQLite, incremental local ingestion, source-aware chunking, AST symbols, relationships, BM25, hash dense retrieval, RRF, RAG evidence assembly, citation labels, abstention, PR report assembly, incident investigation, HMAC webhook verification, Streamlit UI, Docker and GitHub Actions.
 - Implemented but not fully evaluated: graph traversal and end-to-end Streamlit behavior.
 - Partially implemented: GitHub REST client; no confirmed Check Run or PR comment publishing.
+- Implemented: Public GitHub HTTPS connection and on-demand file retrieval without cloning through the API and Streamlit sidebar.
 - Not implemented: active Chroma retrieval, hosted LLM generation, reranker, trained ML model, MLflow and gold retrieval benchmark.
 - Synthetic data: clearly labelled in `data/sample_repository`, `data/sample_documents`, and `data/sample_incidents`.
 

@@ -3,9 +3,54 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.database.connection import initialize_database, database
 from app.ingestion.repository_loader import ingest_repository
+from app.github.repository_url import parse_public_github_url
 
 
 client = TestClient(app)
+
+
+def test_github_import_accepts_only_public_github_urls():
+    repo_id, canonical = parse_public_github_url(
+        "https://github.com/HKUDS/RAG-Anything.git"
+    )
+    assert repo_id == "github-hkuds-rag-anything"
+    assert canonical == "https://github.com/HKUDS/RAG-Anything.git"
+
+    for url in (
+        "http://github.com/HKUDS/RAG-Anything",
+        "https://example.com/HKUDS/RAG-Anything",
+        "https://github.com/HKUDS/RAG-Anything/tree/main",
+        "https://user:pass@github.com/HKUDS/RAG-Anything",
+    ):
+        try:
+            parse_public_github_url(url)
+        except ValueError:
+            continue
+        raise AssertionError(f"Unexpectedly accepted URL: {url}")
+
+
+def test_github_import_endpoint_rejects_non_github_url():
+    response = client.post(
+        "/repositories/connect-github",
+        json={"remote_url": "https://example.com/owner/repo"},
+    )
+    assert response.status_code == 422
+
+
+def test_github_connection_does_not_clone_repository():
+    response = client.post(
+        "/repositories/connect-github",
+        json={"remote_url": "https://github.com/HKUDS/RAG-Anything.git"},
+    )
+    assert response.status_code == 200
+    repo_id = response.json()["repository_id"]
+    with database() as connection:
+        row = connection.execute(
+            "SELECT local_path, remote_url FROM repositories WHERE repository_id=?",
+            (repo_id,),
+        ).fetchone()
+    assert row["local_path"] is None
+    assert row["remote_url"].endswith("RAG-Anything.git")
 
 
 def test_rag_abstains_for_empty_repository(tmp_path):

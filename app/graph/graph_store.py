@@ -40,4 +40,5 @@ def store_symbols_and_relationships(repository_id: str, symbols, relationships, 
                     relationship.extraction_method,
                 ),
             )
-        connection.commit()
+        if owns_connection:
+            connection.commit()

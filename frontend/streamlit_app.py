@@ -9,7 +9,7 @@ import streamlit as st
 API_URL = os.getenv("IMPACTLENS_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 
-def post(path: str, payload: dict) -> dict:
+def post(path: str, payload: dict, timeout: int = 30) -> dict:
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         f"{API_URL}{path}",
@@ -18,7 +18,7 @@ def post(path: str, payload: dict) -> dict:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
@@ -50,7 +50,7 @@ st.set_page_config(page_title="ImpactLens", layout="wide")
 st.title("ImpactLens")
 st.caption("Evidence-grounded software change impact analysis")
 
-repository_id = st.text_input("Repository ID", "demo")
+repository_id = st.text_input("Repository ID", "demo", key="repository_id")
 workflow = st.sidebar.radio("Workflow", ["Engineering Q&A", "PR impact", "Incident investigation"])
 st.sidebar.write(f"API: `{API_URL}`")
 
@@ -59,6 +59,25 @@ try:
     st.sidebar.success(f"API connected ({health['status']})")
 except RuntimeError as exc:
     show_api_error(exc)
+
+with st.sidebar.form("github_import"):
+    github_url = st.text_input(
+        "Public GitHub repository URL",
+        placeholder="https://github.com/HKUDS/RAG-Anything.git",
+    )
+    import_clicked = st.form_submit_button("Connect without cloning")
+
+if import_clicked and github_url.strip():
+    try:
+        connected = post(
+            "/repositories/connect-github",
+            {"remote_url": github_url.strip()},
+        )
+        st.session_state["repository_id"] = connected["repository_id"]
+        st.sidebar.success("Connected. Relevant files will be fetched from GitHub when you ask.")
+        st.rerun()
+    except Exception as exc:
+        show_api_error(exc)
 
 if st.sidebar.button("Index demo repository"):
     try:

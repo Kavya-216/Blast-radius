@@ -17,12 +17,24 @@ def cosine(left: list[float], right: list[float]) -> float:
 
 def retrieve(repository_id: str, query: str, limit: int = 10) -> list[dict]:
     with database() as connection:
+        repository = connection.execute(
+            "SELECT local_path, remote_url FROM repositories WHERE repository_id=?",
+            (repository_id,),
+        ).fetchone()
+        if repository and repository["remote_url"] and not repository["local_path"]:
+            remote_url = repository["remote_url"]
+            rows = []
+        else:
+            remote_url = None
         rows = connection.execute(
             "SELECT chunk_id, file_path, symbol_name, source_type, content "
             "FROM chunks WHERE repository_id=?",
             (repository_id,),
-        ).fetchall()
+        ).fetchall() if remote_url is None else []
 
+    if remote_url:
+        from app.retrieval.github_retriever import retrieve_github_repository
+        return retrieve_github_repository(remote_url, query, limit)
     if not rows:
         return []
     bm25 = BM25().fit([row["content"] for row in rows])

@@ -46,12 +46,15 @@ The sample repository, incidents, and architecture documents are synthetic and e
 python scripts/run_demo.py
 ```
 
+In the Streamlit sidebar, paste a public GitHub HTTPS repository URL and click **Connect without cloning**. ImpactLens reads the GitHub file tree, then fetches a bounded set of relevant supported text files on demand for each query. It does not create a local clone. Public repositories on `github.com` are supported; private repositories require a configured token, and other Git hosts are unsupported.
+
 ## API
 
 - `GET /health`
 - `POST /repositories`
 - `GET /repositories/{id}`
 - `POST /repositories/{id}/index`
+- `POST /repositories/connect-github` with `{"remote_url":"https://github.com/owner/repository.git"}`
 - `GET /repositories/{id}/retrieve?query=...`
 - `POST /rag/query`
 - `POST /prs/analyze`

@@ -35,6 +35,7 @@ def ingest_repository(repository_id: str, local_path: str) -> dict:
             (repository_id, now),
         )
         job_id = job.lastrowid
+        connection.execute("SAVEPOINT ingestion_work")
         try:
             for path in files:
                 relative = path.relative_to(root).as_posix()
@@ -148,8 +149,11 @@ def ingest_repository(repository_id: str, local_path: str) -> dict:
                 "chunks_written=?, files_deleted=?, finished_at=? WHERE id=?",
                 (len(files), chunks_written, deleted, now, job_id),
             )
+            connection.execute("RELEASE SAVEPOINT ingestion_work")
             connection.commit()
         except Exception as exc:
+            connection.execute("ROLLBACK TO SAVEPOINT ingestion_work")
+            connection.execute("RELEASE SAVEPOINT ingestion_work")
             connection.execute(
                 "UPDATE ingestion_jobs SET status='failed', error=?, finished_at=? WHERE id=?",
                 (str(exc), now, job_id),

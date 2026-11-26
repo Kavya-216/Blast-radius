@@ -20,7 +20,10 @@ def rag_query(payload: dict) -> dict:
     question = str(payload.get("question", "")).strip()
     if not repository_id or not question:
         raise HTTPException(status_code=422, detail="repository_id and question are required")
-    evidence = retrieve(repository_id, question, limit=10)
+    try:
+        evidence = retrieve(repository_id, question, limit=10)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     generation = generate_answer(question, evidence)
     return {
         "answer": generation.text,
