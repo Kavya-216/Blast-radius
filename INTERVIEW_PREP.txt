@@ -1,0 +1,225 @@
+IMPACTLENS INTERVIEW PREPARATION
+
+SECTION A: PROJECT EXPLANATION
+
+ImpactLens is a local evidence-grounded software change impact analysis system. It ingests repository source and engineering documents, performs Python AST analysis, builds SQL-backed relationships, retrieves relevant evidence with dense and sparse search, and generates structured PR, RAG, and incident outputs.
+
+It solves the problem of fragmented engineering knowledge. A change can affect code, tests, architecture notes, incidents, and historical decisions. Generic code search finds text; a generic chatbot is not tied to repository state and can hallucinate dependencies. RAG retrieves current repository evidence. Graph relationships add statically detectable context. The ML component is intentionally absent until real labelled data exists.
+
+30-second explanation: "ImpactLens ingests a repository, extracts Python symbols and relationships, builds an incremental evidence index, retrieves code and documents using BM25 plus embeddings, and creates cited, uncertainty-aware impact summaries. It also provides incident investigation and a demo PR workflow."
+
+1-minute explanation: "The backend is FastAPI, metadata is SQLite, source is chunked by Python and document structure, and AST analysis extracts stable symbols, imports and direct calls. Retrieval combines cosine similarity over deterministic hash vectors with BM25 and Reciprocal Rank Fusion. A bounded graph traversal supplements evidence. The offline provider formats retrieved evidence instead of pretending to be an LLM, and it abstains with no evidence. GitHub webhook signatures are HMAC-verified. A trained risk model is not claimed because no valid label data exists."
+
+3-minute explanation: "The system separates ingestion, static analysis, retrieval, report assembly, incidents and optional integrations. Incremental indexing hashes source documents and preserves versions. Python AST parsing identifies modules, classes, functions, imports and direct calls. Relationships are labelled static and preserve evidence source and extraction method. Retrieval has dense and sparse rankings. RRF combines ranks without comparing incompatible scores. The evidence builder can return graph neighbors. RAG output includes file and source citations and rejects unsupported output by no-evidence abstention. The current offline provider is deterministic; a hosted LLM can be represented by a provider interface but is not configured. ML risk is a fallback status, not a fake score. Tests cover baseline behavior, and synthetic demo data is clearly labelled."
+
+Detailed walkthrough: 1) Register a repository. 2) Index it. 3) Hash documents and create source-aware chunks. 4) Parse Python and store symbols/relationships. 5) Receive a query. 6) Rank chunks with BM25 and offline embeddings. 7) Fuse rankings with RRF. 8) Optionally traverse the graph. 9) Assemble evidence. 10) Return an answer or report. 11) For PR workflows, accept PR metadata locally and use retrieved evidence plus uncertainty. 12) For incidents, retrieve similar code and historical records but label hypotheses as hypotheses.
+
+SECTION B: PYTHON AND SOFTWARE FUNDAMENTALS
+
+Functions: Python functions implement retrieval, ingestion and API behavior. Classes: Pydantic and dataclass objects represent models and immutable chunks/results. Type hints: document input/output contracts. Pydantic: validates API request and response schemas. Exceptions: convert invalid paths, Git failures and missing configuration into explicit failures. Context managers: SQLite connections are opened and closed in try/finally. Comprehensions: filter files and transform rankings. File handling: repository discovery and UTF-8 reads. JSON: webhook and API payload parsing. HTTP: FastAPI and urllib for local/GitHub requests. Async/await: FastAPI webhook reading is asynchronous. Decorators: FastAPI route decorators register endpoints. Environment variables: configuration and secrets. Logging: the project has explicit status/error fields; centralized structured logging remains limited. Git operations: subprocess executes fixed `git diff` arguments. SQLite: structured metadata and transactions. No inheritance is required in the main implementation.
+
+SECTION C: MACHINE-LEARNING FUNDAMENTALS
+
+Supervised learning learns patterns from labelled examples. Feature is an input such as diff size or test distance. Label is an outcome such as regression observed. Training and testing measure separate populations. Temporal validation prevents future evidence from leaking into training. Overfitting learns noise. Underfitting misses signal. Data leakage uses unavailable-at-prediction information. Precision is the fraction of positive predictions that are correct. Recall is the fraction of real positives found. F1 balances precision and recall. PR-AUC summarizes ranking over many thresholds and is useful for rare positive events. Calibration asks whether a score is a true probability. Confusion matrices expose true/false positive/negative counts. Logistic Regression provides a calibrated linear baseline. Random Forest captures non-linear interactions. The project does not train or claim these models. Accuracy is insufficient for rare incidents because predicting all negatives can score highly while finding no incident.
+
+SECTION D: DEEP-LEARNING AND EMBEDDINGS FUNDAMENTALS
+
+A neural network transforms inputs through learned parameters. An embedding is a fixed vector representing an item. Tokenization divides text; ImpactLens's offline embedder instead uses regular-expression tokens and hash buckets. Cosine similarity measures vector direction. Model inference applies learned or deterministic transformations. CPU and GPU differ in execution hardware. Hugging Face models are approved but not loaded by the current implementation. Embeddings support retrieval; an LLM provider supports generation. ImpactLens embeddings and generated text have separate roles.
+
+SECTION E: RAG FROM FIRST PRINCIPLES
+
+RAG means retrieve relevant context and use it to ground a response. Pretraining is fixed and cannot know repository changes. Ingestion discovers files and documents, chunking preserves source boundaries, and metadata preserves traceability. Embeddings make semantic ranking possible. SQLite stores chunks and metadata. BM25 is sparse lexical retrieval. BM25 score is based on term frequency, inverse document frequency, and document length. Hybrid retrieval combines complementary dense and sparse evidence. RRF sums 1/(60+rank) for each document across rankings. Example: document A ranks 1st and 3rd, while B ranks 2nd; RRF A = 1/61+1/63 > B=1/62. Context assembly selects ranked evidence. Citation validation compares response labels to evidence labels. Abstention occurs when no evidence exists. Recall@K asks whether relevant evidence is in top K. Faithfulness asks whether claims are supported. No actual gold set means no invented retrieval metrics.
+
+SECTION F: GRAPH AND STATIC ANALYSIS
+
+An AST is a syntax tree. ast.parse produces nodes with positions. A symbol is a class, function, method or module identifier. Imports represent module dependency statements, calls represent statically detectable name or attribute calls, and edges represent relationships. Nodes include repository, file, module, class, function, test and documents. Traversal is bounded to avoid cycles. Direct relationships come from AST; indirect relationships are reached through multiple edges. Dynamic dispatch, reflection and dependency injection can hide runtime edges. Static relationship is evidence, not proof of runtime execution.
+
+Example: src/payment.py imports calculate_tax from src/billing.py. PaymentProcessor.charge statically calls calculate_tax. test_payment.py statically references PaymentProcessor and charge. A graph can reach the test. It still does not prove a runtime path in every environment.
+
+SECTION G: APIs, BACKEND AND DATABASES
+
+REST maps operations to HTTP methods. GET reads, POST creates/actions, 422 means invalid input, 401 means authentication failure, 503 means unavailable configuration, 404 means missing repository. FastAPI dispatches typed endpoints. Pydantic validates payload shape. Uvicorn serves ASGI. SQLite tables use primary keys, unique repository IDs, foreign-key document links, and indexes on chunk and relationship fields. Transactions commit index updates together. Chroma is a permitted dependency but inactive in the current implementation. SQLite is source/metadata truth; vector storage would hold embeddings as a separate responsibility.
+
+SECTION H: GITHUB INTEGRATION
+
+Git tracks snapshots and diffs. A repository has commits and branches. A PR compares base and head SHAs. The webhook signature prevents unsigned tampering. HMAC-SHA256 uses the exact raw body and a secret. Idempotency means repeated delivery should not create duplicate analysis. A GitHub token accesses the REST API. Check Runs and comments require additional publishing implementation. The project verifies webhooks but does not claim to publish checks or comments.
+
+Complete PR walkthrough: webhook or local payload -> validate -> identify repository/base/head -> git diff -> AST analyze changed symbols -> retrieve evidence -> traverse graph -> assemble uncertainty -> produce report -> optionally publish only after GitHub confirms success.
+
+SECTION I: SYSTEM DESIGN AND PRODUCTION REASONING
+
+The project uses a modular monolith. Indexing is synchronous. Incremental hashing avoids re-embedding unchanged content. No cache or queue is implemented. Idempotency for ingestion comes from content hashes and `INSERT OR REPLACE` behavior. Ingest failures mark status failed and preserve explicit errors. Missing evidence leads abstention. Scaling is limited by in-memory BM25 and dense ranking and SQLite; millions of files require batching, persistent vector storage, a robust graph store, and a queue. Docker and GitHub Actions are included.
+
+SECTION J: EVALUATION AND RESEARCH REASONING
+
+Create a gold dataset by manually labelling relevant chunks for questions. Recall@K = relevant retrieved / relevant total. Precision@K = relevant retrieved / K. MRR = 1/rank of first relevant result. nDCG weights ranking quality by graded relevance. Faithfulness asks whether each claim follows evidence. Citation precision is supported cited claims / citations. Citation completeness is required facts that received citations / required facts. Baselines should include BM25-only and dense-only. No synthetic metric is presented as production performance.
+
+SECTION K: INTERVIEW QUESTION BANK
+
+Beginner
+1. What does FastAPI provide? Direct answer: typed ASGI endpoints and OpenAPI docs.
+2. Why use Pydantic? It validates and serializes payload data.
+3. What is SQLite used for? Structured repository metadata and chunk persistence.
+4. What is a hash? A deterministic content fingerprint.
+5. Why use content hashing? To detect document changes without re-indexing everything.
+6. What is an AST? A structured syntax tree.
+7. What is an embedding? A vector representation.
+8. What is cosine similarity? A similarity based on vector angle.
+9. What is BM25? Lexical ranking using term frequency and length.
+10. What is RAG? Retrieval followed by grounded generation or evidence assembly.
+11. What is a webhook? An HTTP event delivery to the service.
+12. What is HMAC? A keyed message authentication code.
+13. What is a Git diff? A textual change from one commit to another.
+14. What is a base SHA? The PR comparison base commit.
+15. What is a head SHA? The PR submitted commit.
+16. What is Uvicorn? An ASGI server.
+17. What is a test fixture? Controlled setup data for tests.
+18. What is an API status 404? Requested resource is absent.
+19. What is 422? Request payload did not validate.
+20. What is 503? Service is unavailable or misconfigured.
+
+Intermediate
+21. Why do you need chunks? Models and retrieval work on bounded source units.
+22. Why source-aware chunking? Preserve functions and headings instead of arbitrary text.
+23. What metadata belongs in chunks? Repository, source, path, symbol, hash, version and scope.
+24. How does incremental ingestion work? Compare hashes and only reprocess changed source.
+25. What happens on deletion? Mark document deleted and remove chunks.
+26. Why two retrieval systems? Dense and sparse capture semantic and exact-term matches.
+27. How does RRF work? Sum reciprocal ranks across ranking lists.
+28. Why is RRF useful? It combines ranks without raw-score calibration.
+29. What is graph traversal bounded by? Maximum depth and result limit.
+30. Why not execute repository code? Ingestion should be safe and static.
+31. What does an import edge mean? The source module imports a module or symbol statically.
+32. What does a call edge mean? AST found a syntactically identifiable call.
+33. What is evidence strength? A label describing whether evidence is static or stronger.
+34. What is abstention? Refusing to answer with insufficient evidence.
+35. How are citations validated? Response labels are compared with retrieved evidence labels.
+36. Why label synthetic data? To avoid misleading users about real incidents.
+37. Why does the project not publish PR comments? Publishing is not implemented and success is not claimed.
+38. What does ML risk predict in the design? A future regression label for a change.
+39. Why not train now? No valid labelled temporal dataset exists.
+40. Why is accuracy weak for rare incidents? True-negative majority can dominate.
+
+Advanced
+41. How would data leakage occur? Training on future or post-incident fields.
+42. How would temporal validation work? Train before a cutoff and test after it.
+43. How can recall@K miss relevance? If the gold set is incomplete or stale.
+44. Why calibrate a model? Raw scores should correspond to observed probability.
+45. How does dynamic dispatch evade AST? Runtime targets depend on objects or registrations.
+46. How should reflection be handled? Mark unsupported constructs and uncertainties.
+47. How does prompt injection affect RAG? Repository text can try to manipulate instructions.
+48. How is source text isolated? The offline provider does not execute or prioritize source instructions.
+49. How should future hosted generation isolate prompts? System instructions and untrusted evidence sections.
+50. What happens if GitHub is unavailable? Return explicit failure; do not claim publication.
+51. What if the LLM provider is unavailable? Return retrieval evidence or a provider error; do not invent an answer.
+52. What if the index is stale? Surface index status and repository/base SHA metadata.
+53. What if ingestion partially fails? Mark the job/repository failed and don't publish success.
+54. How is a rename detected? Git diff can expose R status and old/new paths.
+55. How should deletion remove embeddings? Delete or mark stale vector records transactionally.
+56. How should a large repository scale? Batch discovery, persistent vectors, workers and caching.
+57. How should concurrent ingestion work? Snapshot state and prevent overlapping publication.
+58. Why is SQLite not a graph database? The prompt forbids a graph framework and SQL relationships suffice.
+59. Why is SQLite not ideal for BM25? Large/full-text scale would require a dedicated search solution.
+60. What is the current observability? Health, ingestion jobs, status fields and test runs.
+
+Python
+61. Why use ast.walk? It visits nested AST nodes.
+62. Why use lineno/end_lineno? It locates symbols.
+63. What is a qualified name? A module-plus-symbol identifier.
+64. Why stable IDs? Retrieval and graph edges need consistent identities.
+65. What is a dataclass? A concise immutable or mutable value container.
+66. Why frozen dataclasses? Prevent accidental mutation of chunk and result values.
+67. What is a context manager? An object that safely manages setup/cleanup.
+68. Why capture subprocess output? Git failures need explicit diagnostics.
+69. Why fixed argv? It avoids shell injection.
+70. Why timeout Git commands? It prevents a hung process.
+
+RAG and GenAI
+71. Why not fine-tune only? Repository evidence changes frequently and citations matter.
+72. Why use BM25 with embeddings? Exact identifiers and semantic meanings differ.
+73. Why RRF instead of score addition? Dense and sparse scores are not calibrated to each other.
+74. Why rerank? Optional reranking can improve precision but requires measured value.
+75. Why chunk overlap? A future implementation can preserve boundary context.
+76. What is context assembly? Selecting bounded evidence and attaching provenance.
+77. What is hallucination? Unsupported claims generated from weak or missing evidence.
+78. How does abstention reduce hallucination? It refuses answers when retrieval returns nothing.
+79. What is token limit? The model's maximum prompt/context capacity.
+80. How would generation be evaluated? Faithfulness, citation precision, completeness and abstention.
+
+ML
+81. What is logistic regression? A linear probabilistic classifier.
+82. What is random forest? Ensembled decision trees.
+83. What is gradient boosting? Sequentially corrected decision trees.
+84. What is PR-AUC? Ranking quality for positives against negatives.
+85. What is calibration? Alignment of predicted score with actual probability.
+86. What is class imbalance? Few positives relative to negatives.
+87. What is underfitting? Model too simple to capture patterns.
+88. What is overfitting? Model fits sample noise.
+89. What is feature importance? A model-specific or permutation view of influence, not causality.
+90. Why temporal validation? It mimics future repository changes.
+
+Backend and databases
+91. Why indexes in SQLite? They accelerate repository and relationship queries.
+92. What are foreign keys? Referential constraints between rows.
+93. What is a transaction? An atomic group of database changes.
+94. How do REST status codes communicate errors? They convey client, server and success conditions.
+95. Why separate route and analysis modules? Separation improves testing and ownership.
+96. How is API documentation exposed? Swagger/OpenAPI from FastAPI.
+97. What does TestClient test? HTTP requests against the ASGI app.
+98. Why startup initializes SQLite? It guarantees schema availability.
+99. Why close SQLite connections? It releases locks and file handles.
+100. How would request validation improve? Pydantic can reject missing or malformed fields.
+
+SECTION L: DIFFICULT INTERVIEWER CHALLENGES
+
+Why RAG instead of fine-tuning? Retrieval reflects changing code and supplies citations; fine-tuning is expensive and poor for exact repository versions.
+How prevent hallucinated dependencies? Clearly label static evidence, cite retrieved chunks, abstain, and never call graph results runtime proof.
+What if the index is stale? Report status and SHA/version metadata and trigger re-indexing.
+What if a function is dynamically imported? AST cannot prove the target; report unsupported or uncertain.
+What if a model predicts wrong tests? It should be advisory and measured against temporal regression outcomes.
+How evaluate rare incidents? Use PR-AUC, recall at a chosen threshold, temporal folds and avoid accuracy-only claims.
+How prevent data leakage? Snapshot features at change time and create labels only from later outcomes.
+How know calibration? Compare predicted bins to observed regression rates on held-out temporal data.
+What happens if GitHub is unavailable? Return or record explicit failure and never claim Check Run/comment publication.
+How handle prompt injection? Treat source as untrusted content and keep system instructions separate in a future hosted provider.
+What for millions of files? Incremental batching, persistent vector and search infrastructure, queueing and caching.
+What are the limitations? Static-only evidence, hash embeddings, offline generation, no ML labels, no real benchmark and no production GitHub publishing.
+What did you implement yourself? The ingestion, AST, graph, BM25, RRF, offline RAG, API, tests, workflows and documentation described in this file.
+
+SECTION M: CODE WALKTHROUGH
+
+app/main.py: creates FastAPI, initializes startup database schema and registers routers.
+app/config.py: reads database, embedding, provider and GitHub environment settings.
+app/database/connection.py: owns SQLite schema and connection lifecycle.
+app/api/routes/repositories.py: repository registration, lookup, indexing and retrieval.
+app/api/routes/workflows.py: RAG, PR, incident and webhook endpoints.
+app/ingestion/repository_loader.py: discovers files, hashes content, chunks, persists jobs and stale state.
+app/ingestion/chunking.py: source-aware chunk builders.
+app/code_analysis/ast_parser.py: Python AST extraction and direct relationship detection.
+app/graph/graph_store.py: SQL relationship and symbol persistence.
+app/graph/traversal.py: bounded relationship traversal.
+app/retrieval/embeddings.py: deterministic offline hash embedding.
+app/retrieval/bm25.py: sparse lexical ranking.
+app/retrieval/rrf.py: reciprocal rank fusion.
+app/retrieval/hybrid_retriever.py: dense/BM25 fusion and evidence output.
+app/rag/llm_provider.py: offline evidence formatting.
+app/rag/citation_validator.py: label-level citation verification.
+app/impact_analysis/analyzer.py: safe local Git diff parsing.
+app/impact_analysis/report_builder.py: impact evidence and uncertainty assembly.
+app/incident/investigator.py: historical-evidence and hypothesis output.
+app/ml/predict.py: explicit no-model fallback.
+app/github/webhook.py: HMAC signature verification.
+app/github/client.py: optional authenticated REST client.
+frontend/streamlit_app.py: three-workflow demo UI.
+scripts/run_demo.py: index and retrieve from synthetic demo repository.
+scripts/run_evaluation.py: actual demo indexing/retrieval smoke evaluation.
+
+SECTION N: HONEST PROJECT DEFENCE
+
+Implemented and tested: health/API, SQLite, incremental ingestion, AST, relationships, BM25, hash embeddings, RRF, RAG abstention, PR/incident output, webhook verification and tests.
+Implemented but not fully evaluated: retrieval quality, graph traversal, Streamlit, Docker.
+Partially implemented: GitHub client and webhook; no Check Run/comment publication.
+Not implemented: trained ML, Chroma active retrieval, hosted LLM, reranker, MLflow, benchmark gold set.
+Blocked: real-world results require repository labels and credentials.
+Synthetic demo data must never be described as real company incident evidence.
+The project is suitable as an interview/demo engineering implementation, not as a claim of production safety or complete dependency coverage.
