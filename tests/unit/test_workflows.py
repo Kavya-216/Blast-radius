@@ -53,3 +53,24 @@ def test_pr_and_incident_workflows_with_demo_index():
     })
     assert incident.status_code == 200
     assert "status" in incident.json()
+
+
+def test_demo_architecture_document_is_retrievable():
+    initialize_database()
+    rid = "architecture-demo"
+    with database() as connection:
+        connection.execute(
+            "INSERT OR REPLACE INTO repositories "
+            "(repository_id, local_path, remote_url, index_version, status, updated_at) "
+            "VALUES (?, 'data', NULL, '0', 'registered', '2026-01-01')",
+            (rid,),
+        )
+        connection.commit()
+    ingest_repository(rid, "data")
+    response = client.get(
+        f"/repositories/{rid}/retrieve",
+        params={"query": "architecture payment billing", "limit": 10},
+    )
+    assert response.status_code == 200
+    paths = [item["file_path"] for item in response.json()["results"]]
+    assert any("architecture" in path for path in paths)

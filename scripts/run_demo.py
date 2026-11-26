@@ -17,10 +17,10 @@ def main() -> None:
             "INSERT OR REPLACE INTO repositories "
             "(repository_id, local_path, remote_url, index_version, status, updated_at) "
             "VALUES (?, ?, NULL, '0', 'registered', '2026-01-01')",
-            (repository_id, "data/sample_repository"),
+            (repository_id, "data"),
         )
         connection.commit()
-    print(ingest_repository(repository_id, "data/sample_repository"))
+    print(ingest_repository(repository_id, "data"))
     print(retrieve(repository_id, "payment tax calculation", limit=5))
 
 
