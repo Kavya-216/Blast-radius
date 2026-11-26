@@ -5,6 +5,9 @@ from app.database.connection import initialize_database, database
 from app.code_analysis.ast_parser import analyze_python_file
 from app.retrieval.bm25 import BM25
 from app.retrieval.rrf import reciprocal_rank_fusion
+from app.github.webhook import verify_github_signature
+import hashlib
+import hmac
 
 
 def test_ast_extracts_class_function_import_and_call():
@@ -54,3 +57,11 @@ def test_incremental_ingestion(tmp_path):
     assert first["status"] == "completed"
     assert second["status"] == "completed"
     assert second["chunks_written"] == 0
+
+
+def test_github_webhook_signature_verification():
+    body = b'{"zen":"test"}'
+    secret = "demo-secret"
+    digest = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    assert verify_github_signature(secret, body, f"sha256={digest}")
+    assert not verify_github_signature(secret, body, "sha256=wrong")

@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from app.config import EMBEDDING_MODEL, LLM_PROVIDER
 from app.database.connection import initialize_database
 from app.api.schemas.common import HealthResponse
-from app.api.routes import repositories
+from app.api.routes import repositories, workflows
 
 
 app = FastAPI(
@@ -12,6 +12,7 @@ app = FastAPI(
     description="Evidence-grounded software change impact analysis.",
 )
 app.include_router(repositories.router)
+app.include_router(workflows.router)
 
 
 @app.on_event("startup")

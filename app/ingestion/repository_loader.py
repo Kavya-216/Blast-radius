@@ -110,6 +110,14 @@ def ingest_repository(repository_id: str, local_path: str) -> dict:
                     from app.code_analysis.ast_parser import analyze_python_file
                     from app.graph.graph_store import store_symbols_and_relationships
                     symbols, relationships = analyze_python_file(repository_id, relative, content)
+                    connection.execute(
+                        "DELETE FROM relationships WHERE repository_id=? AND evidence_source=?",
+                        (repository_id, relative),
+                    )
+                    connection.execute(
+                        "DELETE FROM symbols WHERE repository_id=? AND file_path=?",
+                        (repository_id, relative),
+                    )
                     store_symbols_and_relationships(repository_id, symbols, relationships, connection)
 
             stale = connection.execute(
