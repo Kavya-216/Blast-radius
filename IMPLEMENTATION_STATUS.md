@@ -2,8 +2,8 @@
 
 ## Baseline
 
-- Existing workspace contained only a placeholder [README.md](README.md).
-- No application, tests, dependencies, or sample data existed.
+- Existing workspace contains a partial baseline implementation of FastAPI, SQLite, ingestion, AST analysis, and retrieval.
+- Baseline validation is in progress; the first pass found an attribute-call AST gap and a nested-SQL connection ingestion defect.
 - Python 3.14.2 and pip 26.2.2 are available.
 - The implementation will use FastAPI, Pydantic, SQLite, pytest, Chroma where compatible, and Hugging Face-compatible embeddings.
 

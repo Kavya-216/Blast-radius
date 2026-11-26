@@ -4,6 +4,8 @@ from fastapi import APIRouter, HTTPException
 
 from app.api.schemas.common import RepositoryRegistration, RepositoryStatus
 from app.database.connection import database
+from app.ingestion.repository_loader import ingest_repository
+from app.retrieval.hybrid_retriever import retrieve
 
 
 router = APIRouter(prefix="/repositories", tags=["repositories"])
@@ -55,3 +57,26 @@ def get_repository(repository_id: str) -> RepositoryStatus:
         index_version=row["index_version"],
         status=row["status"],
     )
+
+
+@router.post("/{repository_id}/index")
+def index_repository(repository_id: str) -> dict:
+    with database() as connection:
+        row = connection.execute(
+            "SELECT local_path FROM repositories WHERE repository_id=?",
+            (repository_id,),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Repository not found")
+    return ingest_repository(repository_id, row["local_path"])
+
+
+@router.get("/{repository_id}/retrieve")
+def retrieve_repository(repository_id: str, query: str, limit: int = 10) -> dict:
+    if not query.strip():
+        raise HTTPException(status_code=422, detail="query must not be empty")
+    return {
+        "repository_id": repository_id,
+        "query": query,
+        "results": retrieve(repository_id, query, limit=min(limit, 50)),
+    }
