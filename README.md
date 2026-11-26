@@ -1,95 +1,174 @@
 # ImpactLens
 
-ImpactLens is an evidence-grounded local prototype for software change impact analysis. It combines Python AST analysis, a lightweight SQL-backed relationship graph, dense and BM25 retrieval, reciprocal rank fusion, incident investigation, and structured PR-style reports.
+**Understand the evidence around a code change before it reaches production.**
 
-This is a decision-support tool. It does not prove every dependency or predict every regression.
+ImpactLens is a decision-support prototype for exploring software repositories. It retrieves source code and engineering documents, extracts some Python relationships, and presents evidence for repository questions, PR reviews, and incident investigations. It does not prove that a change is safe or identify every dependency.
 
-## Features
+## What you can do
 
-- FastAPI backend with health, repository, retrieval, RAG, PR, and incident endpoints.
-- Incremental repository and document ingestion with content hashes.
-- Source-aware chunking for Python, Markdown, and text.
-- Python AST symbols, imports, function calls, and graph relationships.
-- 128-dimension offline deterministic embeddings and BM25 hybrid retrieval.
-- Reciprocal Rank Fusion and graph traversal.
-- Deterministic offline RAG with abstention and citation validation.
-- Optional HMAC-verified GitHub webhook endpoint.
-- Streamlit demonstration interface.
-- Optional ML prediction: explicitly unavailable until a valid labelled model exists.
-- SQLite metadata and content persistence.
+### Ask the repository
 
-## Architecture
+Ask questions about source, tests, architecture notes, or incident records. Connect a public GitHub repository from the sidebar without cloning it. For each query, ImpactLens reads the GitHub file tree, fetches a bounded set of relevant text files, ranks their chunks, and displays the supporting paths.
 
-GitHub/local repository -> FastAPI -> ingestion -> SQLite/Chroma-compatible retrieval metadata -> AST/graph -> hybrid retrieval -> evidence assembly -> report or abstention.
+The current response is an **offline evidence summary**, not a generated answer from an LLM. If retrieval finds no evidence, it says so rather than inventing an answer.
 
-## Setup
+### Analyze a PR
+
+Enter a PR number, title, and description. ImpactLens searches the selected repository for related code and test files and shows uncertainties.
+
+**Current limitation:** the UI does not fetch a live GitHub PR or its diff. The risk-model panel reports that no trained model is available; it does not produce a risk score.
+
+### Investigate an incident
+
+Enter an incident description or stack trace. ImpactLens retrieves related source and demo incident records, presents possible explanations as hypotheses, and suggests investigation steps. Similarity is not proof of root cause.
+
+### Index a local repository
+
+The demo button indexes the local `data/` fixtures. The API also supports registering and indexing a local path. Ingestion hashes files, skips unchanged content, chunks supported formats, and extracts Python symbols and static relationships.
+
+## How it works
+
+```text
+Local repository or GitHub file tree
+            |
+            v
+Source-aware chunks + Python AST extraction
+            |
+            v
+SQLite metadata and relationship records
+            |
+            v
+BM25 + deterministic hash-vector ranking
+            |
+            v
+Reciprocal Rank Fusion -> evidence summary and citations
+```
+
+For remote GitHub queries, the app requests repository metadata and a recursive file tree, then fetches at most 12 candidate text files (each at most 250 KB) per question. It does not clone or persist those remote files. GitHub API limits, large truncated trees, and path-based candidate selection can reduce coverage.
+
+## Quick start
+
+Python 3.12 or newer is recommended.
 
 ```bash
 python -m pip install -r requirements.txt
-python scripts/run_demo.py
-uvicorn app.main:app --reload
 ```
 
-Demo UI:
+Run the API and UI in separate terminals from the project root:
 
 ```bash
-streamlit run frontend/streamlit_app.py
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
-
-API docs: `http://127.0.0.1:8000/docs`
-
-## Demo
-
-The sample repository, incidents, and architecture documents are synthetic and explicitly labelled as demo data.
 
 ```bash
-python scripts/run_demo.py
+streamlit run frontend/streamlit_app.py --server.address 0.0.0.0 --server.port 8501
 ```
 
-In the Streamlit sidebar, paste a public GitHub HTTPS repository URL and click **Connect without cloning**. ImpactLens reads the GitHub file tree, then fetches a bounded set of relevant supported text files on demand for each query. It does not create a local clone. Public repositories on `github.com` are supported; private repositories require a configured token, and other Git hosts are unsupported.
+Open the UI at `http://localhost:8501` and the API docs at `http://localhost:8000/docs`.
 
-## API
+### Try the local demo
+
+In the UI sidebar, click **Index demo repository**. The synthetic source, architecture, and incident fixtures are in `data/`.
+
+### Connect a GitHub repository without cloning
+
+In the sidebar, paste a GitHub URL such as:
+
+```text
+https://github.com/HKUDS/RAG-Anything.git
+```
+
+Click **Connect without cloning**. The selected repository ID will update automatically. Then choose **Ask the repository** and ask a question in the main panel. Private repositories need a configured `GITHUB_TOKEN`; only GitHub-hosted URLs are accepted.
+
+### API example
+
+```bash
+curl -X POST http://localhost:8000/repositories/connect-github \
+  -H 'Content-Type: application/json' \
+  -d '{"remote_url":"https://github.com/HKUDS/RAG-Anything.git"}'
+```
+
+Use the returned `repository_id` to query:
+
+```bash
+curl -X POST http://localhost:8000/rag/query \
+  -H 'Content-Type: application/json' \
+  -d '{"repository_id":"github-hkuds-rag-anything","question":"How does the RAG pipeline work?"}'
+```
+
+## Technology
+
+- Python, FastAPI, Pydantic, Uvicorn, Streamlit
+- SQLite for local metadata, chunks, symbols, and relationships
+- Python `ast` for static source analysis
+- Built-in `urllib` for GitHub API and raw-file requests
+- BM25, deterministic 128-dimensional hash vectors, cosine similarity, and RRF
+- Pytest and HTTPX
+
+Chroma is listed in `requirements.txt` but is **not used** by the current retrieval implementation. No hosted LLM, transformer embedding model, reranker, trained ML model, or MLflow experiment is active.
+
+## API routes
 
 - `GET /health`
-- `POST /repositories`
+- `POST /repositories` — register a local repository
 - `GET /repositories/{id}`
 - `POST /repositories/{id}/index`
-- `POST /repositories/connect-github` with `{"remote_url":"https://github.com/owner/repository.git"}`
 - `GET /repositories/{id}/retrieve?query=...`
+- `POST /repositories/connect-github` — connect a GitHub repository without cloning
 - `POST /rag/query`
 - `POST /prs/analyze`
 - `POST /incidents/investigate`
-- `POST /webhooks/github`
+- `POST /webhooks/github` — verify a configured webhook signature and acknowledge the event
+
+FastAPI’s interactive documentation is available at `/docs`.
 
 ## Configuration
 
-- `IMPACTLENS_DATABASE`: SQLite path.
-- `IMPACTLENS_EMBEDDING_MODEL`: embedding model label.
-- `IMPACTLENS_LLM_PROVIDER`: provider label.
-- `GITHUB_TOKEN`: optional GitHub API token.
-- `GITHUB_WEBHOOK_SECRET`: required HMAC signing secret.
+Set environment variables as needed:
+
+- `IMPACTLENS_DATABASE` — SQLite database path
+- `IMPACTLENS_EMBEDDING_MODEL` — displayed embedding label; current vectors are deterministic hashes
+- `IMPACTLENS_LLM_PROVIDER` — displayed provider label; current generation is offline
+- `GITHUB_TOKEN` — optional token for GitHub API requests and private repository access
+- `GITHUB_WEBHOOK_SECRET` — required to accept signed GitHub webhooks
 
 Never commit credentials.
 
-## Testing
+## Development and evaluation
 
 ```bash
 pytest -q
+python scripts/run_demo.py
+python scripts/run_evaluation.py
 ```
 
-## Docker
+The evaluation script is a smoke test, not a retrieval benchmark. No relevance-labelled dataset or ML training data is included, so no retrieval-quality or risk-model metrics are claimed.
 
-```bash
-docker build -t impactlens .
-docker run --rm -p 8000:8000 impactlens
-```
+## What is and is not implemented
 
-## Known limitations
+| Area | Current status |
+|---|---|
+| Local file discovery, content hashes, chunking, SQLite persistence | Implemented |
+| Python symbols, imports, and statically detected calls | Implemented; incomplete by nature |
+| Dense-style hash-vector retrieval, BM25, RRF | Implemented; not benchmarked |
+| Graph relationship storage and bounded traversal | Implemented |
+| GitHub no-clone retrieval | Implemented for bounded text-file fetching |
+| Repository Q&A | Implemented as evidence formatting with citation checks and abstention |
+| PR impact UI | Related-evidence lookup from manually entered metadata; no live PR diff fetch |
+| Incident investigation | Similarity-based evidence and explicitly labelled hypotheses |
+| Webhook signature verification | Implemented; no automatic PR processing |
+| GitHub Check Runs/comments | Not implemented |
+| Trained regression-risk model | Not available without labelled training data |
+| Chroma vector storage, hosted LLM, reranking, MLflow | Not active |
 
-- Static analysis misses runtime-generated dependencies.
-- Offline embeddings are deterministic hash vectors, not transformer embeddings.
-- The RAG provider is offline and template-based; no hosted LLM is required or claimed.
-- Chroma is declared in dependencies but the current retrieval implementation is SQLite + in-memory dense/BM25 ranking.
-- No valid labelled dataset exists, so ML risk prediction is not available.
-- GitHub publishing is not implemented; webhook signature verification is implemented.
-- Synthetic demo data is not evidence of real-world performance.
+## Limitations
+
+- Python dynamic imports, reflection, dispatch, dependency injection, and runtime behavior are not fully visible to AST analysis.
+- Hash embeddings are deterministic lexical features, not semantic transformer embeddings.
+- Remote retrieval selects files partly by their paths; relevant files can be missed.
+- GitHub rate limits and recursive-tree truncation can limit remote queries.
+- The offline response formats retrieved excerpts; it does not synthesize a comprehensive natural-language technical explanation.
+- Synthetic incidents and sample repositories are demo data, not real engineering history.
+- No benchmark establishes production accuracy or safety.
+
+See [docs/LIMITATIONS.md](docs/LIMITATIONS.md), [docs/SECURITY.md](docs/SECURITY.md), and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for additional detail.

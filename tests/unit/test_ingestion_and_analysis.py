@@ -6,6 +6,7 @@ from app.code_analysis.ast_parser import analyze_python_file
 from app.retrieval.bm25 import BM25
 from app.retrieval.rrf import reciprocal_rank_fusion
 from app.github.webhook import verify_github_signature
+from app.ingestion.chunking import chunk_markdown, chunk_python
 import hashlib
 import hmac
 
@@ -65,3 +66,17 @@ def test_github_webhook_signature_verification():
     digest = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     assert verify_github_signature(secret, body, f"sha256={digest}")
     assert not verify_github_signature(secret, body, "sha256=wrong")
+
+
+def test_source_chunks_have_unique_ids_for_repeated_names_and_headings():
+    python_chunks = chunk_python(
+        "class First:\n    def run(self):\n        pass\n"
+        "class Second:\n    def run(self):\n        pass\n",
+        "src/example.py",
+    )
+    markdown_chunks = chunk_markdown(
+        "# Overview\nFirst section.\n# Overview\nSecond section.\n",
+        "README.md",
+    )
+    assert len({chunk.chunk_id for chunk in python_chunks}) == len(python_chunks)
+    assert len({chunk.chunk_id for chunk in markdown_chunks}) == len(markdown_chunks)

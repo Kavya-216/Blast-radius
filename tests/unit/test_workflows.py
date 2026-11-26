@@ -10,11 +10,11 @@ client = TestClient(app)
 
 
 def test_github_import_accepts_only_public_github_urls():
-    repo_id, canonical = parse_public_github_url(
+    repo_id, owner, repository = parse_public_github_url(
         "https://github.com/HKUDS/RAG-Anything.git"
     )
     assert repo_id == "github-hkuds-rag-anything"
-    assert canonical == "https://github.com/HKUDS/RAG-Anything.git"
+    assert (owner, repository) == ("HKUDS", "RAG-Anything")
 
     for url in (
         "http://github.com/HKUDS/RAG-Anything",
@@ -51,6 +51,42 @@ def test_github_connection_does_not_clone_repository():
         ).fetchone()
     assert row["local_path"] is None
     assert row["remote_url"].endswith("RAG-Anything.git")
+
+
+def test_remote_github_query_fetches_relevant_files_on_demand(monkeypatch):
+    import json
+    from app.retrieval import github_retriever
+
+    def fake_github_request(url, accept):
+        if url.endswith("/repos/HKUDS/RAG-Anything"):
+            return json.dumps({"default_branch": "main"}).encode()
+        if "/git/trees/" in url:
+            return json.dumps({
+                "truncated": False,
+                "tree": [
+                    {"path": "README.md", "type": "blob", "size": 80},
+                    {"path": "src/pipeline.py", "type": "blob", "size": 80},
+                ],
+            }).encode()
+        if url.endswith("/README.md"):
+            return b"# Architecture\nRAG pipeline retrieves documents and builds context."
+        if url.endswith("/src/pipeline.py"):
+            return b"def retrieve_documents(query):\n    return query\n"
+        raise AssertionError(f"Unexpected URL {url}")
+
+    monkeypatch.setattr(github_retriever, "_github_request", fake_github_request)
+    client.post(
+        "/repositories/connect-github",
+        json={"remote_url": "https://github.com/HKUDS/RAG-Anything.git"},
+    )
+    response = client.post("/rag/query", json={
+        "repository_id": "github-hkuds-rag-anything",
+        "question": "How does the RAG pipeline retrieve documents?",
+    })
+    assert response.status_code == 200
+    assert response.json()["abstained"] is False
+    assert any("README.md" in item["file_path"] for item in response.json()["evidence"])
+    assert response.json()["citation_validation"]["supported"] is True
 
 
 def test_rag_abstains_for_empty_repository(tmp_path):
